@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ｐｕｒｅ　Ｓｃｒｉｐｔｓ - Recoil Control</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #3b006a, #8e00c2);
+    color: #d6b3ff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem;
+  }
+  label, button {
+    margin: 0.5rem 0;
+  }
+  input, select {
+    padding: 0.5rem;
+    border-radius: 5px;
+    border: none;
+    font-size: 1rem;
+    width: 200px;
+  }
+  button {
+    background: #8e00c2;
+    color: white;
+    border: none;
+    cursor: pointer;
+    padding: 0.7rem 1.5rem;
+    border-radius: 10px;
+  }
+  #status {
+    margin-top: 1rem;
+    min-height: 20px;
+  }
+</style>
+</head>
+<body>
+  <h1>Pure Scripts Recoil Control</h1>
+
+  <div>
+    <label for="licenseInput">Enter License Key:</label><br />
+    <input type="text" id="licenseInput" placeholder="Enter license key" />
+    <button id="verifyBtn">Verify License</button>
+  </div>
+
+  <div id="licenseSection" style="display:none;">
+    <label for="operatorSelect">Select Operator:</label><br />
+    <select id="operatorSelect">
+      <option value="default">Default</option>
+      <option value="operator1">Operator 1</option>
+      <option value="operator2">Operator 2</option>
+    </select>
+
+    <label for="sensitivityRange">Sensitivity:</label><br />
+    <input type="range" id="sensitivityRange" min="0.1" max="5" step="0.1" value="1.0" />
+    <span id="sensitivityValue">1.0</span>
+
+    <br />
+    <button id="startBtn">Start Recoil Control</button>
+    <button id="stopBtn" disabled>Stop</button>
+  </div>
+
+  <div id="status"></div>
+
+<script>
+  const ws = new WebSocket("ws://localhost:8765");
+  const statusEl = document.getElementById("status");
+  const licenseInput = document.getElementById("licenseInput");
+  const verifyBtn = document.getElementById("verifyBtn");
+  const licenseSection = document.getElementById("licenseSection");
+  const operatorSelect = document.getElementById("operatorSelect");
+  const sensitivityRange = document.getElementById("sensitivityRange");
+  const sensitivityValue = document.getElementById("sensitivityValue");
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
+
+  sensitivityRange.addEventListener('input', () => {
+    sensitivityValue.textContent = sensitivityRange.value;
+  });
+
+  ws.onopen = () => {
+    statusEl.textContent = "Connected to backend. Please verify your license.";
+  };
+
+  ws.onerror = () => {
+    statusEl.textContent = "Failed to connect backend. Make sure the backend is running.";
+  };
+
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.action === "license_response") {
+      if (data.valid) {
+        statusEl.textContent = data.msg;
+        licenseSection.style.display = "block";
+        licenseInput.disabled = true;
+        verifyBtn.disabled = true;
+      } else {
+        statusEl.textContent = data.msg;
+      }
+    } else if (data.action === "settings_updated") {
+      statusEl.textContent = "Settings updated.";
+    } else if (data.error) {
+      statusEl.textContent = data.error;
+    }
+  };
+
+  verifyBtn.onclick = () => {
+    const key = licenseInput.value.trim();
+    if (!key) {
+      statusEl.textContent = "Please enter a license key.";
+      return;
+    }
+    ws.send(JSON.stringify({ action: "verify_license", license_key: key }));
+  };
+
+  startBtn.onclick = () => {
+    ws.send(JSON.stringify({
+      action: "update_settings",
+      operator: operatorSelect.value,
+      sensitivity: sensitivityRange.value,
+      running: true
+    }));
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+  };
+
+  stopBtn.onclick = () => {
+    ws.send(JSON.stringify({
+      action: "update_settings",
+      running: false
+    }));
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  };
+</script>
+</body>
+</html>
